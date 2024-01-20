@@ -1,0 +1,12 @@
+---
+
+kvm:
+  bridge: kvmbr0
+  packages:
+    - bridge-utils
+    - libvirt
+    - qemu-kvm
+    - virt-install
+    - virt-manager
+
+...

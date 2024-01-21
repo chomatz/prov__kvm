@@ -3,124 +3,39 @@
 - name: ensure tasks run only on selected os releases
   block:
 
-    - name: install and configure a kvm hypervisor
+    - name: configure default network bridge
       block:
 
-        - name: provision kvm hypervisor
+        - name: ip v4/6 forwarding
           ansible.builtin.debug:
             msg: |
-              ----------------------------------------
-              installs virtualization related packages
-              ----------------------------------------
+              --------------------------------------
+              configure forwarding for ipv4 and ipv6
+              --------------------------------------
             verbosity: 0
           delegate_to: localhost
           run_once: true
-
-        - name: install virtualization packages
-          ansible.builtin.package:
-            name: "{{ kvm.packages }}"
-            state: latest
-
-    - name: configure nested virtualization
-      block:
-
-        - name: enable nested virtualization
-          ansible.builtin.debug:
-            msg: |
-              ---------------------------------------------------------
-              enables nested virtualization on either AMD or Intel cpus
-              ---------------------------------------------------------
-            verbosity: 0
-          delegate_to: localhost
-          run_once: true
-
-        - name: enable AMD nested virtualization
-          ansible.builtin.lineinfile:
-            path: /etc/modprobe.d/kvm.conf
-            regexp: '^.*options kvm_amd nested'
-            line: options kvm_amd nested=1
-            create: true
-            owner: root
-            group: root
-            mode: "0644"
-          when: ansible_processor.1 == "AuthenticAMD"
-
-        - name: enable Intel nested virtualization
-          ansible.builtin.lineinfile:
-            path: /etc/modprobe.d/kvm.conf
-            regexp: '^.*options kvm_intel nested'
-            line: options kvm_intel nested=1
-            create: true
-            owner: root
-            group: root
-            mode: "0644"
-          when: ansible_processor.1 == "GenuineIntel"
-
-    - name: virtualization optimizations
-      block:
-
-        - name: enable virtualization optimizations
-          ansible.builtin.debug:
-            msg: |
-              ------------------------------------------------------
-              configure vendor specific virtualization optimizations
-              ------------------------------------------------------
-            verbosity: 0
-          delegate_to: localhost
-          run_once: true
-
-        - name: add kernel virtualization arguments
-          ansible.builtin.command:
-            cmd: "grubby --args='{{ item.key }}={{ item.value }}' --update-kernel=ALL"
-          with_items: "{{ kernel.arguments.amd }}"
-          register: kernel_amd
-          failed_when:
-            - kernel_amd is failed
-            - "'No such file or directory' not in kernel_amd.msg"
-          when: ansible_processor.1 == "AuthenticAMD"
-
-        - name: add kernel virtualization arguments
-          ansible.builtin.command:
-            cmd: "grubby --args='{{ item.key }}={{ item.value }}' --update-kernel=ALL"
-          with_items: "{{ kernel.arguments.intel }}"
-          register: kernel_intel
-          failed_when:
-            - kernel_intel is failed
-            - "'No such file or directory' not in kernel_intel.msg"
-          when: ansible_processor.1 == "GenuineIntel"
-
-    - name: service management
-      block:
-
-        - name: enable the virtualization service
-          ansible.builtin.debug:
-            msg: |
-              ---------------------------------------------------
-              configure the libvirtd service to run automatically
-              ---------------------------------------------------
-            verbosity: 0
-          delegate_to: localhost
-          run_once: true
-
-        - name: enable and start the libvirt service
-          ansible.builtin.service:
-            name: libvirtd
-            state: started
-            enabled: true
-
-    - name: enable network bridge
-      block:
 
         - name: enable ip forwarding
-          ansible.builtin.blockinfile:
-            path: /etc/sysctl.d/ip_forward.conf
-            block: |
-              net.ipv4.ip_forwarding=1
-              net.ipv6.conf.all.forwarding=1
-            create: true
-            owner: root
-            group: root
-            mode: "0644"
+          ansible.posix.sysctl:
+            name: "{{ item }}"
+            value: 1
+            state: present
+            sysctl_set: true
+            sysctl_file: /etc/sysctl.d/ip_forward.conf
+          with_items:
+            - net.ipv4.ip_forward
+            - net.ipv6.conf.all.forwarding
+
+        - name: ipv4 information
+          ansible.builtin.debug:
+            msg: |
+              ------------------------------------------------
+              gather information on the default ipv4 interface
+              ------------------------------------------------
+            verbosity: 0
+          delegate_to: localhost
+          run_once: true
 
         - name: display ipv4 information
           ansible.builtin.debug:
@@ -148,6 +63,16 @@
             var: ipv4_method.stdout
             verbosity: 1
 
+        - name: bridge configuration
+          ansible.builtin.debug:
+            msg: |
+              ------------------------------
+              configure the bridge interface
+              ------------------------------
+            verbosity: 0
+          delegate_to: localhost
+          run_once: true
+
         - name: auto ivp4 configuration
           block:
 
@@ -164,7 +89,7 @@
             - name: display bridge creation status
               ansible.builtin.debug:
                 var: bridge_result
-                verbosity: 0
+                verbosity: 1
 
           when: ipv4_method.stdout == "auto"
 
@@ -196,6 +121,16 @@
 
           when: ipv4_method.stdout == "manual"
 
+        - name: slave configuration
+          ansible.builtin.debug:
+            msg: |
+              -----------------------------
+              configure the slave interface
+              -----------------------------
+            verbosity: 0
+          delegate_to: localhost
+          run_once: true
+
         - name: "create slave interface - {{ kvm.bridge }}-slave-{{ ansible_default_ipv4.interface }}"
           community.general.nmcli:
             conn_name: "{{ kvm.bridge }}-slave-{{ ansible_default_ipv4.interface }}"
@@ -211,6 +146,16 @@
             cmd: "nmcli connection up {{ kvm.bridge }}; nmcli connection up {{ kvm.bridge }}-slave-{{ ansible_default_ipv4.interface }}"
 
       rescue:
+
+        - name: bridge configuration rollback
+          ansible.builtin.debug:
+            msg: |
+              -----------------------------------
+              remove the faulty bridge interfaces
+              -----------------------------------
+            verbosity: 0
+          delegate_to: localhost
+          run_once: true
 
         - name: remove created interfaces
           community.general.nmcli:

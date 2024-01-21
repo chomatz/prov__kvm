@@ -1,5 +1,17 @@
 ---
 
+kernel:
+  arguments:
+    amd:
+      - key: amd-iommu
+        value: 'on'
+      - key: iommu
+        value: pt
+      - key: pci
+        value: nommconf
+    intel:
+      - key: intel_iommu
+        value: 'on'
 kvm:
   bridge: kvmbr0
   packages:

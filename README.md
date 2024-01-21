@@ -12,9 +12,15 @@ ansible role for kvm provisioning
 
   tasks:
 
-    - name: deploy kvm
+    - name: provision libvirt
       ansible.builtin.include_role:
         name: prov__kvm
+        tasks_from: libvirt.yml
+
+    - name: provision network bridge
+      ansible.builtin.include_role:
+        name: prov__kvm
+        tasks_from: bridge.yml
 
 ...
 ```

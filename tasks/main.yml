@@ -3,45 +3,110 @@
 - name: ensure tasks run only on selected os releases
   block:
 
-    - name: provision kvm hypervisor
-      ansible.builtin.debug:
-        msg: installs kvm and attempts to create a network bridge on the default interface
-        verbosity: 0
-      delegate_to: localhost
-      run_once: true
+    - name: install and configure a kvm hypervisor
+      block:
 
-    - name: install virtualization packages
-      ansible.builtin.package:
-        name: "{{ kvm.packages }}"
-        state: latest
+        - name: provision kvm hypervisor
+          ansible.builtin.debug:
+            msg: |
+              ----------------------------------------
+              installs virtualization related packages
+              ----------------------------------------
+            verbosity: 0
+          delegate_to: localhost
+          run_once: true
 
-    - name: enable nested virtualization
-      ansible.builtin.lineinfile:
-        path: /etc/modprobe.d/kvm.conf
-        regexp: '^.*options kvm_amd nested'
-        line: options kvm_amd nested=1
-        create: true
-        owner: root
-        group: root
-        mode: "0644"
-      when: ansible_processor.1 == "AuthenticAMD"
+        - name: install virtualization packages
+          ansible.builtin.package:
+            name: "{{ kvm.packages }}"
+            state: latest
 
-    - name: enable nested virtualization
-      ansible.builtin.lineinfile:
-        path: /etc/modprobe.d/kvm.conf
-        regexp: '^.*options kvm_intel nested'
-        line: options kvm_intel nested=1
-        create: true
-        owner: root
-        group: root
-        mode: "0644"
-      when: ansible_processor.1 == "GenuineIntel"
+    - name: configure nested virtualization
+      block:
 
-    - name: enable and start the libvirt service
-      ansible.builtin.service:
-        name: libvirtd
-        state: started
-        enabled: true
+        - name: enable nested virtualization
+          ansible.builtin.debug:
+            msg: |
+              ---------------------------------------------------------
+              enables nested virtualization on either AMD or Intel cpus
+              ---------------------------------------------------------
+            verbosity: 0
+          delegate_to: localhost
+          run_once: true
+
+        - name: enable AMD nested virtualization
+          ansible.builtin.lineinfile:
+            path: /etc/modprobe.d/kvm.conf
+            regexp: '^.*options kvm_amd nested'
+            line: options kvm_amd nested=1
+            create: true
+            owner: root
+            group: root
+            mode: "0644"
+          when: ansible_processor.1 == "AuthenticAMD"
+
+        - name: enable Intel nested virtualization
+          ansible.builtin.lineinfile:
+            path: /etc/modprobe.d/kvm.conf
+            regexp: '^.*options kvm_intel nested'
+            line: options kvm_intel nested=1
+            create: true
+            owner: root
+            group: root
+            mode: "0644"
+          when: ansible_processor.1 == "GenuineIntel"
+
+    - name: virtualization optimizations
+      block:
+
+        - name: enable virtualization optimizations
+          ansible.builtin.debug:
+            msg: |
+              ------------------------------------------------------
+              configure vendor specific virtualization optimizations
+              ------------------------------------------------------
+            verbosity: 0
+          delegate_to: localhost
+          run_once: true
+
+        - name: add kernel virtualization arguments
+          ansible.builtin.command:
+            cmd: "grubby --args='{{ item.key }}={{ item.value }}' --update-kernel=ALL"
+          with_items: "{{ kernel.arguments.amd }}"
+          register: kernel_amd
+          failed_when:
+            - kernel_amd is failed
+            - "'No such file or directory' not in kernel_amd.msg"
+          when: ansible_processor.1 == "AuthenticAMD"
+
+        - name: add kernel virtualization arguments
+          ansible.builtin.command:
+            cmd: "grubby --args='{{ item.key }}={{ item.value }}' --update-kernel=ALL"
+          with_items: "{{ kernel.arguments.intel }}"
+          register: kernel_intel
+          failed_when:
+            - kernel_intel is failed
+            - "'No such file or directory' not in kernel_intel.msg"
+          when: ansible_processor.1 == "GenuineIntel"
+
+    - name: service management
+      block:
+
+        - name: enable the virtualization service
+          ansible.builtin.debug:
+            msg: |
+              ---------------------------------------------------
+              configure the libvirtd service to run automatically
+              ---------------------------------------------------
+            verbosity: 0
+          delegate_to: localhost
+          run_once: true
+
+        - name: enable and start the libvirt service
+          ansible.builtin.service:
+            name: libvirtd
+            state: started
+            enabled: true
 
     - name: enable network bridge
       block:

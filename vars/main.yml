@@ -3,15 +3,11 @@
 kernel:
   arguments:
     amd:
-      - key: amd-iommu
-        value: 'on'
-      - key: iommu
-        value: pt
-      - key: pci
-        value: nommconf
+      - amd-iommu=on
+      - iommu=pt
+      - pci=nommconf
     intel:
-      - key: intel_iommu
-        value: 'on'
+      - intel_iommu=on
 kvm:
   bridge: kvmbr0
   packages:

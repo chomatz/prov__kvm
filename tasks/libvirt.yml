@@ -60,24 +60,40 @@
       delegate_to: localhost
       run_once: true
 
+#    - name: add kernel virtualization arguments
+#      ansible.builtin.command:
+#        cmd: "grubby --args='{{ item.key }}={{ item.value }}' --update-kernel=ALL"
+#      with_items: "{{ kernel.arguments.amd }}"
+#      register: kernel_amd
+#      failed_when:
+#        - kernel_amd is failed
+#        - "'No such file or directory' not in kernel_amd.msg"
+#      when: ansible_processor.1 == "AuthenticAMD"
+
+#    - name: add kernel virtualization arguments
+#      ansible.builtin.command:
+#        cmd: "grubby --args='{{ item.key }}={{ item.value }}' --update-kernel=ALL"
+#      with_items: "{{ kernel.arguments.intel }}"
+#      register: kernel_intel
+#      failed_when:
+#        - kernel_intel is failed
+#        - "'No such file or directory' not in kernel_intel.msg"
+#      when: ansible_processor.1 == "GenuineIntel"
+
     - name: add kernel virtualization arguments
-      ansible.builtin.command:
-        cmd: "grubby --args='{{ item.key }}={{ item.value }}' --update-kernel=ALL"
-      with_items: "{{ kernel.arguments.amd }}"
-      register: kernel_amd
-      failed_when:
-        - kernel_amd is failed
-        - "'No such file or directory' not in kernel_amd.msg"
+      ansible.builtin.include_role:
+        name: mgmt__grub
+        tasks_from: grubby.yml
+      vars:
+        kernel_arguments: "{{ kernel.arguments.amd }}"
       when: ansible_processor.1 == "AuthenticAMD"
 
     - name: add kernel virtualization arguments
-      ansible.builtin.command:
-        cmd: "grubby --args='{{ item.key }}={{ item.value }}' --update-kernel=ALL"
-      with_items: "{{ kernel.arguments.intel }}"
-      register: kernel_intel
-      failed_when:
-        - kernel_intel is failed
-        - "'No such file or directory' not in kernel_intel.msg"
+      ansible.builtin.include_role:
+        name: mgmt__grub
+        tasks_from: grubby.yml
+      vars:
+        kernel_arguments: "{{ kernel.arguments.intel }}"
       when: ansible_processor.1 == "GenuineIntel"
 
     - name: enable the virtualization service

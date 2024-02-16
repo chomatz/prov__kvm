@@ -6,16 +6,6 @@
     - name: configure default network bridge
       block:
 
-        - name: ip v4/6 forwarding
-          ansible.builtin.debug:
-            msg: |
-              --------------------------------------
-              configure forwarding for ipv4 and ipv6
-              --------------------------------------
-            verbosity: 0
-          delegate_to: localhost
-          run_once: true
-
         - name: enable ip forwarding
           ansible.posix.sysctl:
             name: "{{ item }}"
@@ -26,16 +16,6 @@
           with_items:
             - net.ipv4.ip_forward
             - net.ipv6.conf.all.forwarding
-
-        - name: ipv4 information
-          ansible.builtin.debug:
-            msg: |
-              ------------------------------------------------
-              gather information on the default ipv4 interface
-              ------------------------------------------------
-            verbosity: 0
-          delegate_to: localhost
-          run_once: true
 
         - name: display ipv4 information
           ansible.builtin.debug:
@@ -63,17 +43,7 @@
             var: ipv4_method.stdout
             verbosity: 1
 
-        - name: bridge configuration
-          ansible.builtin.debug:
-            msg: |
-              ------------------------------
-              configure the bridge interface
-              ------------------------------
-            verbosity: 0
-          delegate_to: localhost
-          run_once: true
-
-        - name: auto ivp4 configuration
+        - name: automatic ivp4 configuration
           block:
 
             - name: "create {{ ipv4_method.stdout }} bridge interface - {{ kvm.bridge }}"
@@ -117,19 +87,9 @@
             - name: display bridge creation status
               ansible.builtin.debug:
                 var: bridge_result
-                verbosity: 0
+                verbosity: 1
 
           when: ipv4_method.stdout == "manual"
-
-        - name: slave configuration
-          ansible.builtin.debug:
-            msg: |
-              -----------------------------
-              configure the slave interface
-              -----------------------------
-            verbosity: 0
-          delegate_to: localhost
-          run_once: true
 
         - name: "create slave interface - {{ kvm.bridge }}-slave-{{ ansible_default_ipv4.interface }}"
           community.general.nmcli:
@@ -146,16 +106,6 @@
             cmd: "nmcli connection up {{ kvm.bridge }}; nmcli connection up {{ kvm.bridge }}-slave-{{ ansible_default_ipv4.interface }}"
 
       rescue:
-
-        - name: bridge configuration rollback
-          ansible.builtin.debug:
-            msg: |
-              -----------------------------------
-              remove the faulty bridge interfaces
-              -----------------------------------
-            verbosity: 0
-          delegate_to: localhost
-          run_once: true
 
         - name: remove created interfaces
           community.general.nmcli:
